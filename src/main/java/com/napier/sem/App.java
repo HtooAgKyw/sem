@@ -12,7 +12,7 @@ public class App
     {
         // Connect to MongoDB
         MongoClient mongoClient =
-                MongoClients.create("mongodb://localhost:27000");
+                MongoClients.create("mongodb://mongo-dbserver:27017");
 
         // Get database
         MongoDatabase database = mongoClient.getDatabase("mydb");

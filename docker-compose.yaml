@@ -1,0 +1,11 @@
+services:
+  # Application Dockerfile is in the current folder
+  app:
+    build: .
+    depends_on:
+      - db
+
+  # MySQL Dockerfile is inside the db folder
+  db:
+    build: ./db
+    restart: always

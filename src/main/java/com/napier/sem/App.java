@@ -1,46 +1,69 @@
 package com.napier.sem;
 
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import org.bson.Document;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 
 public class App
 {
     public static void main(String[] args)
     {
-        // Connect to MongoDB
-        MongoClient mongoClient =
-                MongoClients.create("mongodb://mongo-dbserver:27017");
+        Connection con = null;
 
-        // Get database
-        MongoDatabase database = mongoClient.getDatabase("mydb");
+        int retries = 10;
 
-        // Get collection
-        MongoCollection<Document> collection =
-                database.getCollection("test");
-
-        // Create document
-        Document doc = new Document("name", "Kevin Sim")
-                .append("class", "Software Engineering Methods")
-                .append("year", "2026")
-                .append("result",
-                        new Document("CW", 95)
-                                .append("EX", 85));
-
-        // Insert document
-        collection.insertOne(doc);
-
-        // Retrieve first document
-        Document myDoc = collection.find().first();
-
-        if (myDoc != null)
+        for (int i = 0; i < retries; i++)
         {
-            System.out.println(myDoc.toJson());
+            System.out.println("Connecting to database...");
+
+            try
+            {
+                con = DriverManager.getConnection(
+                        "jdbc:mysql://db:3306/employees?useSSL=false&allowPublicKeyRetrieval=true",
+                        "root",
+                        "example"
+                );
+
+                System.out.println("Successfully connected to database!");
+                break;
+            }
+            catch (SQLException e)
+            {
+                System.out.println(
+                        "Failed to connect to database. Attempt "
+                                + (i + 1) + " of " + retries
+                );
+
+                System.out.println(e.getMessage());
+
+                try
+                {
+                    // Wait 5 seconds before trying again
+                    Thread.sleep(5000);
+                }
+                catch (InterruptedException ie)
+                {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
         }
 
-        // Close connection
-        mongoClient.close();
+        if (con == null)
+        {
+            System.out.println("Could not connect to database.");
+            return;
+        }
+
+        try
+        {
+            con.close();
+            System.out.println("Database connection closed.");
+        }
+        catch (SQLException e)
+        {
+            System.out.println("Error closing database connection.");
+            System.out.println(e.getMessage());
+        }
     }
 }

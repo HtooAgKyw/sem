@@ -5,6 +5,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 
 public class App
 {
@@ -117,6 +118,49 @@ public class App
         }
     }
 
+    public ArrayList<Employee> getEmployeesByTitle(String title)
+    {
+        ArrayList<Employee> employees = new ArrayList<>();
+
+        try
+        {
+            Statement stmt = con.createStatement();
+
+            String strSelect =
+                    "SELECT employees.emp_no, employees.first_name, "
+                            + "employees.last_name, salaries.salary "
+                            + "FROM employees, salaries, titles "
+                            + "WHERE employees.emp_no = salaries.emp_no "
+                            + "AND employees.emp_no = titles.emp_no "
+                            + "AND salaries.to_date = '9999-01-01' "
+                            + "AND titles.to_date = '9999-01-01' "
+                            + "AND titles.title = '" + title + "' "
+                            + "ORDER BY employees.emp_no ASC";
+
+            ResultSet rset = stmt.executeQuery(strSelect);
+
+            while (rset.next())
+            {
+                Employee emp = new Employee();
+
+                emp.emp_no = rset.getInt("emp_no");
+                emp.first_name = rset.getString("first_name");
+                emp.last_name = rset.getString("last_name");
+                emp.salary = rset.getInt("salary");
+
+                employees.add(emp);
+            }
+
+            return employees;
+        }
+        catch (Exception e)
+        {
+            System.out.println(e.getMessage());
+            System.out.println("Failed to get employees by title");
+            return null;
+        }
+    }
+
 
     /**
      * Display an employee.
@@ -136,6 +180,22 @@ public class App
                             + emp.dept_name + "\n"
                             + "Manager: " + emp.manager + "\n"
             );
+        }
+    }
+
+    public void displayEmployees(ArrayList<Employee> employees)
+    {
+        if (employees != null)
+        {
+            for (Employee emp : employees)
+            {
+                System.out.println(
+                        emp.emp_no + "\t"
+                                + emp.first_name + "\t"
+                                + emp.last_name + "\t"
+                                + emp.salary
+                );
+            }
         }
     }
 
@@ -161,19 +221,15 @@ public class App
 
     public static void main(String[] args)
     {
-        // Create new Application
         App a = new App();
 
-        // Connect to database
         a.connect();
 
-        // Get employee
-        Employee emp = a.getEmployee(255530);
+        ArrayList<Employee> employees =
+                a.getEmployeesByTitle("Engineer");
 
-        // Display employee
-        a.displayEmployee(emp);
+        a.displayEmployees(employees);
 
-        // Disconnect from database
         a.disconnect();
     }
 }

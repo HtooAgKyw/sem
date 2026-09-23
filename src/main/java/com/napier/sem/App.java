@@ -173,6 +173,39 @@ public class App
     }
 
     /**
+     * Prints a list of employees and their salaries.
+     *
+     * @param employees The list of employees to print.
+     */
+    public void printSalaries(ArrayList<Employee> employees)
+    {
+        if (employees == null)
+        {
+            System.out.println("No salary information available.");
+            return;
+        }
+
+        // Print header
+        System.out.println(
+                String.format("%-10s %-15s %-20s %-8s",
+                        "Emp No", "First Name", "Last Name", "Salary")
+        );
+
+        // Print employees
+        for (Employee emp : employees)
+        {
+            String emp_string =
+                    String.format("%-10s %-15s %-20s %-8s",
+                            emp.emp_no,
+                            emp.first_name,
+                            emp.last_name,
+                            emp.salary);
+
+            System.out.println(emp_string);
+        }
+    }
+
+    /**
      * Gets employees with a given current job title.
      *
      * @param title Job title to search for.
@@ -300,20 +333,16 @@ public class App
 
     public static void main(String[] args)
     {
-        // Create new application
         App a = new App();
 
         // Connect to database
         a.connect();
 
-        // Extract employee salary information
+        // Get all current salaries
         ArrayList<Employee> employees = a.getAllSalaries();
 
-        // Test the size of the returned data
-        if (employees != null)
-        {
-            System.out.println(employees.size());
-        }
+        // Print salary report
+        a.printSalaries(employees);
 
         // Disconnect from database
         a.disconnect();

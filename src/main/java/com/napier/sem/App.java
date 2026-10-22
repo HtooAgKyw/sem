@@ -14,18 +14,19 @@ public class App
     /**
      * Connect to the MySQL database.
      */
-    public void connect()
+    public void connect(String location, int delay)
     {
         int retries = 10;
 
         for (int i = 0; i < retries; i++)
         {
-            System.out.println("Connecting to database...");
-
             try
             {
+                System.out.println("Connecting to database...");
+
                 con = DriverManager.getConnection(
-                        "jdbc:mysql://db:3306/employees?useSSL=false&allowPublicKeyRetrieval=true",
+                        "jdbc:mysql://" + location
+                                + "/employees?allowPublicKeyRetrieval=true&useSSL=false",
                         "root",
                         "example"
                 );
@@ -35,20 +36,16 @@ public class App
             }
             catch (SQLException e)
             {
-                System.out.println(
-                        "Failed to connect to database. Attempt "
-                                + (i + 1) + " of " + retries
-                );
-
+                System.out.println("Connection attempt " + (i + 1) + " failed.");
                 System.out.println(e.getMessage());
 
                 if (i < retries - 1)
                 {
                     try
                     {
-                        Thread.sleep(5000);
+                        Thread.sleep(delay);
                     }
-                    catch (InterruptedException ie)
+                    catch (InterruptedException ex)
                     {
                         Thread.currentThread().interrupt();
                         return;
@@ -57,7 +54,7 @@ public class App
             }
         }
 
-        System.out.println("Could not connect to the database.");
+        System.out.println("Unable to connect to database.");
     }
 
     /**
@@ -651,6 +648,38 @@ public class App
         }
     }
 
+    public void addEmployee(Employee emp)
+    {
+        if (con == null || emp == null)
+        {
+            throw new IllegalStateException(
+                    "Database connection and employee are required."
+            );
+        }
+
+        String sql = """
+            INSERT INTO employees
+            (emp_no, first_name, last_name, birth_date, gender, hire_date)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """;
+
+        try (PreparedStatement stmt = con.prepareStatement(sql))
+        {
+            stmt.setInt(1, emp.emp_no);
+            stmt.setString(2, emp.first_name);
+            stmt.setString(3, emp.last_name);
+            stmt.setDate(4, java.sql.Date.valueOf("1990-01-01"));
+            stmt.setString(5, "M");
+            stmt.setDate(6, java.sql.Date.valueOf("2020-01-01"));
+
+            stmt.executeUpdate();
+        }
+        catch (SQLException e)
+        {
+            throw new IllegalStateException("Failed to add employee", e);
+        }
+    }
+
     /**
      * Main method used to test the
      * Salary by Department feature.
@@ -661,54 +690,35 @@ public class App
     {
         App a = new App();
 
-        a.connect();
+        if (args.length == 0)
+        {
+            // Running directly from IntelliJ
+            a.connect("localhost:33060", 10000);
+        }
+        else if (args.length >= 2)
+        {
+            // Running inside Docker
+            a.connect(args[0], Integer.parseInt(args[1]));
+        }
+        else
+        {
+            System.out.println("Usage: java -jar seMethods.jar [host:port delayMs]");
+            return;
+        }
 
-        // Exercise 1:
-        // Get department including manager
-        Department dept = a.getDepartment("Sales");
+        Department dept = a.getDepartment("Development");
 
         if (dept != null)
         {
-            System.out.println(
-                    "Department: "
-                            + dept.dept_no + " "
-                            + dept.dept_name
-            );
-
-            if (dept.manager != null)
-            {
-                System.out.println(
-                        "Manager: "
-                                + dept.manager.emp_no + " "
-                                + dept.manager.first_name + " "
-                                + dept.manager.last_name
-                );
-            }
-
-            // Salary by Department feature
             ArrayList<Employee> employees =
                     a.getSalariesByDepartment(dept);
 
             a.printSalaries(employees);
         }
-
-        // Exercise 2:
-        // Get employee by employee number
-        System.out.println("\nEmployee by ID:");
-
-        Employee empById =
-                a.getEmployee(10001);
-
-        a.displayEmployee(empById);
-
-        // Exercise 3:
-        // Get employee by first and last name
-        System.out.println("\nEmployee by Name:");
-
-        Employee empByName =
-                a.getEmployee("Georgi", "Facello");
-
-        a.displayEmployee(empByName);
+        else
+        {
+            System.out.println("Department not found.");
+        }
 
         a.disconnect();
     }

@@ -1,9 +1,7 @@
 FROM eclipse-temurin:25
 
-LABEL authors="USER"
+WORKDIR /app
 
-COPY ./target/seMethods-2.0.0-jar-with-dependencies.jar /tmp/
+COPY ./target/seMethods.jar /app/seMethods.jar
 
-WORKDIR /tmp
-
-ENTRYPOINT ["java", "-jar", "seMethods-2.0.0-jar-with-dependencies.jar"]
+ENTRYPOINT ["java", "-jar", "seMethods.jar", "db:3306", "10000"]

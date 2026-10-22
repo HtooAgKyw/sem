@@ -50,7 +50,18 @@ jobs:
           cache: maven
 
       - name: Start MySQL Database
-        run: docker compose up -d --build db
+        run: |
+          docker compose up -d --build db
+          for i in {1..60}; do
+            if docker compose exec -T db mysqladmin ping -h 127.0.0.1 -uroot -pexample --silent; then
+              echo "MySQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready"
+          docker compose logs db
+          exit 1
 
       - name: Run Integration Tests and Generate Coverage
         run: mvn --batch-mode -Dtest=AppIntegrationTest verify

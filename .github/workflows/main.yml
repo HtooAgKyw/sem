@@ -1,27 +1,112 @@
-name: A workflow for my Hello World App
 
-on: push
+name: CI Build and Test
+
+on:
+  push:
+    branches:
+      - develop
+      - master
+  pull_request:
+    branches:
+      - develop
+      - master
 
 jobs:
-  build:
-    name: Hello world action
-    runs-on: ubuntu-latest
+  UnitTests:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Set up JDK 25
+      - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: '25'
-          distribution: 'temurin'
-          cache: 'maven'
+          cache: maven
 
-      - name: Build with Maven
-        run: mvn clean package
+      - name: Run Unit Tests
+        run: mvn --batch-mode -Dtest=AppTest test
+
+  IntegrationTests:
+    name: Integration Tests and Code Coverage
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Start MySQL
+        run: docker compose up -d --build db
+
+      - name: Wait for MySQL
+        run: |
+          for i in {1..60}; do
+            if docker compose exec -T db mysqladmin ping \
+              -h 127.0.0.1 -uroot -pexample --silent; then
+              echo "MySQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "MySQL did not become ready"
+          docker compose logs db
+          exit 1
+
+      - name: Run Integration Tests and Generate Coverage
+        run: mvn --batch-mode -Dtest=AppIntegrationTest verify
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./target/site/jacoco/jacoco.xml
+          fail_ci_if_error: true
+          verbose: true
+
+      - name: Clean Up Database
+        if: always()
+        run: docker compose down --remove-orphans
+
+  Build:
+    name: Build and Run Docker Compose
+    needs:
+      - UnitTests
+      - IntegrationTests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Package Application
+        run: mvn --batch-mode package -DskipTests
 
       - name: Run Docker Compose
-        run: docker compose up --build --abort-on-container-exit
+        run: docker compose up --build --abort-on-container-exit --exit-code-from app
+
+      - name: Clean Up
+        if: always()
+        run: docker compose down --remove-orphans

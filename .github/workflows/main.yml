@@ -1,20 +1,15 @@
 
-name: CI Build, Test and Release
+name: CI Build and Test
 
 on:
   push:
     branches:
       - develop
       - master
-    tags:
-      - 'v*'
   pull_request:
     branches:
       - develop
       - master
-
-permissions:
-  contents: read
 
 jobs:
   UnitTests:
@@ -22,7 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -38,11 +33,11 @@ jobs:
         run: mvn --batch-mode -Dtest=AppTest test
 
   IntegrationTests:
-    name: Integration Tests and Coverage
+    name: Integration Tests and Code Coverage
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -67,33 +62,34 @@ jobs:
             fi
             sleep 2
           done
+          echo "MySQL did not become ready"
           docker compose logs db
           exit 1
 
-      - name: Run Integration Tests
+      - name: Run Integration Tests and Generate Coverage
         run: mvn --batch-mode -Dtest=AppIntegrationTest verify
 
-      - name: Upload Code Coverage
-        if: success()
+      - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./target/site/jacoco/jacoco.xml
           fail_ci_if_error: true
+          verbose: true
 
       - name: Clean Up Database
         if: always()
         run: docker compose down --remove-orphans
 
   Build:
-    name: Build and Run Docker
+    name: Build and Run Docker Compose
     needs:
       - UnitTests
       - IntegrationTests
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -106,49 +102,11 @@ jobs:
           cache: maven
 
       - name: Package Application
-        run: mvn --batch-mode clean package -DskipTests
-
-      - name: Verify JAR
-        run: test -f target/seMethods.jar
+        run: mvn --batch-mode package -DskipTests
 
       - name: Run Docker Compose
         run: docker compose up --build --abort-on-container-exit --exit-code-from app
 
-      - name: Upload JAR Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: seMethods
-          path: target/seMethods.jar
-          if-no-files-found: error
-
       - name: Clean Up
         if: always()
         run: docker compose down --remove-orphans
-
-  Release:
-    name: Publish GitHub Release
-    needs: Build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download JAR
-        uses: actions/download-artifact@v4
-        with:
-          name: seMethods
-          path: release
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          gh release create "$RELEASE_TAG" \
-            release/seMethods.jar \
-            --title "SEM $RELEASE_TAG" \
-            --generate-notes \
-            --verify-tag

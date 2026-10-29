@@ -1,15 +1,20 @@
 
-name: CI Build and Test
+name: CI Build, Test and Release
 
 on:
   push:
     branches:
       - develop
       - master
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - develop
       - master
+
+permissions:
+  contents: read
 
 jobs:
   UnitTests:
@@ -17,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -33,11 +38,11 @@ jobs:
         run: mvn --batch-mode -Dtest=AppTest test
 
   IntegrationTests:
-    name: Integration Tests and Code Coverage
+    name: Integration Tests and Coverage
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -49,33 +54,46 @@ jobs:
           java-version: '25'
           cache: maven
 
-      - name: Start MySQL Database
+      - name: Start MySQL
         run: docker compose up -d --build db
 
-      - name: Run Integration Tests and Generate Coverage
+      - name: Wait for MySQL
+        run: |
+          for i in {1..60}; do
+            if docker compose exec -T db mysqladmin ping \
+              -h 127.0.0.1 -uroot -pexample --silent; then
+              echo "MySQL is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs db
+          exit 1
+
+      - name: Run Integration Tests
         run: mvn --batch-mode -Dtest=AppIntegrationTest verify
 
-      - name: Upload Coverage to Codecov
+      - name: Upload Code Coverage
+        if: success()
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./target/site/jacoco/jacoco.xml
           fail_ci_if_error: true
-          verbose: true
 
       - name: Clean Up Database
         if: always()
         run: docker compose down --remove-orphans
 
   Build:
-    name: Build and Run Docker Compose
+    name: Build and Run Docker
     needs:
       - UnitTests
       - IntegrationTests
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -88,11 +106,49 @@ jobs:
           cache: maven
 
       - name: Package Application
-        run: mvn --batch-mode package -DskipTests
+        run: mvn --batch-mode clean package -DskipTests
+
+      - name: Verify JAR
+        run: test -f target/seMethods.jar
 
       - name: Run Docker Compose
         run: docker compose up --build --abort-on-container-exit --exit-code-from app
 
+      - name: Upload JAR Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seMethods
+          path: target/seMethods.jar
+          if-no-files-found: error
+
       - name: Clean Up
         if: always()
         run: docker compose down --remove-orphans
+
+  Release:
+    name: Publish GitHub Release
+    needs: Build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: seMethods
+          path: release
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            release/seMethods.jar \
+            --title "SEM $RELEASE_TAG" \
+            --generate-notes \
+            --verify-tag
